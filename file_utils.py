@@ -1,6 +1,7 @@
 # file_utils.py
 import os
 import logging
+from typing import Optional
 
 # Excel 파일 읽기 라이브러리 임포트 시도
 try:
@@ -109,7 +110,7 @@ def load_system_prompt(file_path: str) -> str:
     return content
 
 
-def find_file_by_keywords(search_path: str, keywords: list[str]) -> str | None:
+def find_file_by_keywords(search_path: str, keywords: list[str]) -> Optional[str]:
     """지정된 경로에서 키워드가 모두 포함된 파일명을 찾아 전체 경로를 반환합니다.
 
     파일명에서 (1), (2) 등의 번호 패턴을 무시하고 검색합니다.
@@ -161,6 +162,7 @@ def get_file_content(file_path: str) -> str:
 import io
 import zipfile
 from PIL import Image
+from typing import Optional
 from fastapi import UploadFile
 
 
@@ -347,9 +349,6 @@ def extract_attendance_list_from_excel(file_path: str) -> list[str]:
                 "Webex 신청여부",
                 "비고",
             ]
-            # 기장선, 김희인 등은 예시 이미지에 있는 이름들이라 제외하면 안될 것 같지만,
-            # 사용자 요청이 "기간, 참석명단과 같은 사람 이름아닌것도 참석자로 파싱되는데 수정해줘" 이므로
-            # 명백히 사람이 아닌 헤더성 텍스트만 제외하도록 수정.
 
             REAL_EXCLUDED_KEYWORDS = [
                 "기간",
@@ -359,11 +358,10 @@ def extract_attendance_list_from_excel(file_path: str) -> list[str]:
                 "활동내용",
                 "활동사진",
                 "활동계획",
-                "Webex 신청여부",
+                "Webex",
+                "신청여부",
                 "비고",
                 "순번",
-                "캠퍼스",
-                "반",
                 "이름",
                 "등록일시",
                 "온라인",
@@ -443,11 +441,10 @@ def extract_attendance_list_from_excel(file_path: str) -> list[str]:
                 "활동내용",
                 "활동사진",
                 "활동계획",
-                "Webex 신청여부",
+                "Webex",
+                "신청여부",
                 "비고",
                 "순번",
-                "캠퍼스",
-                "반",
                 "이름",
                 "등록일시",
             ]
@@ -479,16 +476,34 @@ def extract_attendance_list_from_excel(file_path: str) -> list[str]:
     return []
 
 
-def parse_attendance_string(text: str) -> dict | None:
+def parse_attendance_string(text: str) -> Optional[dict]:
     """참석자 문자열을 파싱합니다.
     예: "구미 2반 권택민" -> {"campus": "구미", "class_name": "2반", "name": "권택민"}
     """
-    parts = text.strip().split()
+    import re
+
+    text = text.strip()
+
+    # 1. 공백으로 구분된 경우 (기존 로직과 유사하지만 반 형식 확인 추가)
+    parts = text.split()
     if len(parts) >= 3:
         # 가장 마지막 요소가 이름, 그 앞이 반, 그 앞이 캠퍼스라고 가정
         name = parts[-1]
         class_name = parts[-2]
         campus = parts[-3]
 
-        return {"campus": campus, "class_name": class_name, "name": name}
+        if "반" in class_name:
+            return {"campus": campus, "class_name": class_name, "name": name}
+
+    # 2. 정규식으로 추출 (공백이 없거나 불규칙한 경우)
+    # 예: "구미6반 김대규", "구미 6반김대규", "구미6반김대규", "구미_6반_김대규"
+    # 캠퍼스(2글자 이상), 반(숫자+반), 이름(2글자 이상)
+    match = re.search(r"([가-힣]{2,})[\s_]*(\d+반)[\s_]*([가-힣]{2,})", text)
+    if match:
+        return {
+            "campus": match.group(1),
+            "class_name": match.group(2),
+            "name": match.group(3),
+        }
+
     return None

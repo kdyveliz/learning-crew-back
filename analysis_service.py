@@ -63,7 +63,7 @@ class AnalysisService:
         except Exception:
             return {"campus": None, "class_name": None, "author_name": None}
 
-    def get_matching_key(self, filename: str) -> str | None:
+    def get_matching_key(self, filename: str) -> Optional[str]:
         try:
             # 파일명에서 (1), (2) 같은 번호 패턴 제거
             filename = file_utils.clean_filename(filename)
@@ -138,10 +138,18 @@ class AnalysisService:
 
             # 파싱 실패 시, 파일명 정보로 보완 시도
             if not parsed and file_info["campus"] and file_info["class_name"]:
+                # entry가 "구미 6반 김대규" 처럼 전체 문자열일 수 있음.
+                # 정규식으로 캠퍼스와 반 정보 제거 시도
+                import re
+
+                clean_name = entry.strip()
+                # "구미 6반", "구미6반" 같은 패턴 제거
+                clean_name = re.sub(r"[가-힣]{2,}[\s_]*\d+반", "", clean_name).strip()
+
                 parsed = {
                     "campus": file_info["campus"],
                     "class_name": file_info["class_name"],
-                    "name": entry.strip(),
+                    "name": clean_name,
                 }
 
             if parsed:
